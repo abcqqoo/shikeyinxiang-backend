@@ -1,0 +1,76 @@
+spring:
+  application:
+    name: file-service
+  main:
+    web-application-type: none
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: ${REDIS_DATABASE:0}
+      timeout: 3000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+          max-wait: -1ms
+
+  cache:
+    type: redis
+    redis:
+      time-to-live: 5m
+      cache-null-values: false
+      use-key-prefix: true
+      key-prefix: "${spring.application.name}::"
+
+# Dubbo 配置
+dubbo:
+  application:
+    name: ${spring.application.name}
+  protocol:
+    name: dubbo
+    port: 20889
+  registry:
+    address: zookeeper://${ZOOKEEPER_HOST:localhost}:2181
+  scan:
+    base-packages: com.example.diet.file.infrastructure.dubbo
+
+# Cloudflare R2 配置
+cloudflare:
+  r2:
+    access-key: ${R2_ACCESS_KEY:your-access-key}
+    secret-key: ${R2_SECRET_KEY:your-secret-key}
+    endpoint: ${R2_ENDPOINT:https://your-account-id.r2.cloudflarestorage.com}
+    bucket-name: ${R2_BUCKET_NAME:user-avatar}
+    region: auto
+    allowed-types: jpg,png,gif,webp,svg,pdf
+
+# 日志配置
+app:
+  logging:
+    mode: ${APP_LOGGING_MODE:dual}
+    json:
+      path: ${APP_LOGGING_JSON_PATH:logs}
+
+logging:
+  config: classpath:observability-logback-spring.xml
+  level:
+    root: INFO
+    com.example.diet: INFO
+    org.apache.dubbo: WARN
+    org.mybatis: WARN
+
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+logging:
+  level:
+    com.example.diet: DEBUG
+    org.apache.dubbo: INFO
+    org.mybatis: DEBUG

@@ -7,118 +7,179 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>2.7.5</version>
+        <version>3.3.0</version>
+        <relativePath/>
     </parent>
 
-    <groupId>com.example</groupId>
-    <artifactId>spring-boot-dubbo-demo</artifactId>
-    <version>1.0.0</version>
+    <groupId>com.example.diet</groupId>
+    <artifactId>diet-tracking-system</artifactId>
+    <version>2.0.0-SNAPSHOT</version>
     <packaging>pom</packaging>
+    <name>Diet Tracking System</name>
+    <description>DDD + Dubbo 微服务饮食记录系统</description>
 
     <modules>
         <module>shared-kernel</module>
-        <module>user-api-contracts</module>
-        <module>food-api-contracts</module>
-        <module>file-api-contracts</module>
-        <module>diet-api-contracts</module>
-        <module>nutrition-api-contracts</module>
-        <module>dashboard-api-contracts</module>
-        <module>auth-service</module>
+        <module>observability-starter</module>
         <module>api-gateway</module>
-        <module>file-service</module>
+        <module>user-service</module>
         <module>food-service</module>
         <module>diet-service</module>
         <module>nutrition-service</module>
-        <module>user-service</module>
+        <module>file-service</module>
         <module>dashboard-service</module>
     </modules>
 
     <properties>
-        <java.version>1.8</java.version>
-        <maven.compiler.source>1.8</maven.compiler.source>
-        <maven.compiler.target>1.8</maven.compiler.target>
+        <java.version>21</java.version>
+        <maven.compiler.source>21</maven.compiler.source>
+        <maven.compiler.target>21</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 
-        <dubbo.version>3.0.9</dubbo.version>
-        <mybatis-plus.version>3.5.2</mybatis-plus.version>
-        <jwt.version>0.11.5</jwt.version>
-        <spring-boot.version>2.7.5</spring-boot.version>
-        <caffeine.version>2.9.3</caffeine.version>
-        <jsr310.version>2.13.5</jsr310.version>
-        <spring-cloud-alibaba.version>2021.0.4.0</spring-cloud-alibaba.version>
-
-        <!-- 监控相关版本 -->
-        <micrometer.version>1.9.5</micrometer.version>
-        <logstash-logback-encoder.version>7.2</logstash-logback-encoder.version>
-        <zipkin.version>2.23.16</zipkin.version>
-
-        <aws.sdk.version>2.29.52</aws.sdk.version>
-        <commons-lang3.version>3.13.0</commons-lang3.version>
-        <junit.version>5.9.3</junit.version>
-        <mysql.version>8.0.33</mysql.version>
+        <!-- 核心依赖版本 -->
+        <dubbo.version>3.3.0</dubbo.version>
+        <mybatis-plus.version>3.5.7</mybatis-plus.version>
+        <mysql.version>8.3.0</mysql.version>
+        <jwt.version>0.12.5</jwt.version>
+        <mapstruct.version>1.5.5.Final</mapstruct.version>
+        <logstash.logback.encoder.version>7.4</logstash.logback.encoder.version>
+        
+        <!-- 强制指定 Spring 版本，覆盖 Dubbo 传递依赖 (Spring Boot 3.3.0 对应 6.1.x) -->
+        <spring-framework.version>6.1.8</spring-framework.version>
+        <spring-security.version>6.3.0</spring-security.version>
     </properties>
-
-    <dependencies>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.projectlombok</groupId>
-            <artifactId>lombok</artifactId>
-            <optional>true</optional>
-        </dependency>
-    </dependencies>
 
     <dependencyManagement>
         <dependencies>
+            <!-- ====== 1. Spring Framework BOM - MUST be FIRST to override Dubbo's transitive deps ====== -->
             <dependency>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-starter-security</artifactId>
-                <version>${spring-boot.version}</version>
+                <groupId>org.springframework</groupId>
+                <artifactId>spring-framework-bom</artifactId>
+                <version>6.1.8</version>
+                <type>pom</type>
+                <scope>import</scope>
             </dependency>
+
+            <!-- ====== 2. Spring Security BOM ====== -->
+            <dependency>
+                <groupId>org.springframework.security</groupId>
+                <artifactId>spring-security-bom</artifactId>
+                <version>${spring-security.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- ====== 3. Dubbo BOM - AFTER Spring BOMs ====== -->
+            <dependency>
+                <groupId>org.apache.dubbo</groupId>
+                <artifactId>dubbo-bom</artifactId>
+                <version>${dubbo.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- ==================== 内部模块 ==================== -->
+            <!-- shared-kernel -->
+            <dependency>
+                <groupId>com.example.diet</groupId>
+                <artifactId>shared-kernel</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.example.diet</groupId>
+                <artifactId>observability-starter</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <!-- user-service -->
+            <dependency>
+                <groupId>com.example.diet</groupId>
+                <artifactId>user-service-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.example.diet</groupId>
+                <artifactId>user-service-app</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <!-- food-service -->
+            <dependency>
+                <groupId>com.example.diet</groupId>
+                <artifactId>food-service-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.example.diet</groupId>
+                <artifactId>food-service-app</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <!-- diet-service -->
+            <dependency>
+                <groupId>com.example.diet</groupId>
+                <artifactId>diet-service-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.example.diet</groupId>
+                <artifactId>diet-service-app</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <!-- nutrition-service -->
+            <dependency>
+                <groupId>com.example.diet</groupId>
+                <artifactId>nutrition-service-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.example.diet</groupId>
+                <artifactId>nutrition-service-app</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <!-- file-service -->
+            <dependency>
+                <groupId>com.example.diet</groupId>
+                <artifactId>file-service-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.example.diet</groupId>
+                <artifactId>file-service-app</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <!-- dashboard-service -->
+            <dependency>
+                <groupId>com.example.diet</groupId>
+                <artifactId>dashboard-service-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.example.diet</groupId>
+                <artifactId>dashboard-service-app</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <!-- ==================== 第三方依赖 ==================== -->
+            <!-- MyBatis Plus -->
+            <dependency>
+                <groupId>com.baomidou</groupId>
+                <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
+                <version>${mybatis-plus.version}</version>
+            </dependency>
+
+            <!-- MySQL -->
             <dependency>
                 <groupId>com.mysql</groupId>
                 <artifactId>mysql-connector-j</artifactId>
                 <version>${mysql.version}</version>
             </dependency>
-            <dependency>
-                <groupId>javax.servlet</groupId>
-                <artifactId>javax.servlet-api</artifactId>
-                <version>4.0.1</version>
-                <scope>provided</scope>
-            </dependency>
-            <dependency>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-starter-data-redis</artifactId>
-                <version>${spring-boot.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-starter-cache</artifactId>
-                <version>${spring-boot.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.github.ben-manes.caffeine</groupId>
-                <artifactId>caffeine</artifactId>
-                <version>${caffeine.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.apache.dubbo</groupId>
-                <artifactId>dubbo-spring-boot-starter</artifactId>
-                <version>${dubbo.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.apache.dubbo</groupId>
-                <artifactId>dubbo-dependencies-zookeeper</artifactId>
-                <version>${dubbo.version}</version>
-                <type>pom</type>
-            </dependency>
-            <dependency>
-                <groupId>com.baomidou</groupId>
-                <artifactId>mybatis-plus-boot-starter</artifactId>
-                <version>${mybatis-plus.version}</version>
-            </dependency>
+
+            <!-- JWT -->
             <dependency>
                 <groupId>io.jsonwebtoken</groupId>
                 <artifactId>jjwt-api</artifactId>
@@ -134,113 +195,29 @@
                 <artifactId>jjwt-jackson</artifactId>
                 <version>${jwt.version}</version>
             </dependency>
-            <dependency>
-                <groupId>com.fasterxml.jackson.datatype</groupId>
-                <artifactId>jackson-datatype-jsr310</artifactId>
-                <version>${jsr310.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>software.amazon.awssdk</groupId>
-                <artifactId>bom</artifactId>
-                <version>${aws.sdk.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-            <dependency>
-                <groupId>org.apache.commons</groupId>
-                <artifactId>commons-lang3</artifactId>
-                <version>${commons-lang3.version}</version>
-            </dependency>
-            <!-- Spring Cloud Alibaba Sentinel - 只保留核心依赖 -->
-            <dependency>
-                <groupId>com.alibaba.cloud</groupId>
-                <artifactId>spring-cloud-starter-alibaba-sentinel</artifactId>
-                <version>${spring-cloud-alibaba.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.alibaba.cloud</groupId>
-                <artifactId>spring-cloud-alibaba-sentinel-gateway</artifactId>
-                <version>${spring-cloud-alibaba.version}</version>
-            </dependency>
 
-            <!-- Spring Cloud Gateway -->
+            <!-- MapStruct -->
             <dependency>
-                <groupId>org.springframework.cloud</groupId>
-                <artifactId>spring-cloud-starter-gateway</artifactId>
-                <version>3.1.4</version>
-            </dependency>
-
-            <!-- 监控相关依赖 -->
-            <!-- 监控相关依赖 - 轻量级方案 -->
-            <dependency>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-starter-actuator</artifactId>
-                <version>${spring-boot.version}</version>
+                <groupId>org.mapstruct</groupId>
+                <artifactId>mapstruct</artifactId>
+                <version>${mapstruct.version}</version>
             </dependency>
             <dependency>
-                <groupId>io.micrometer</groupId>
-                <artifactId>micrometer-registry-prometheus</artifactId>
-                <version>${micrometer.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>net.logstash.logback</groupId>
-                <artifactId>logstash-logback-encoder</artifactId>
-                <version>${logstash-logback-encoder.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.zipkin.brave</groupId>
-                <artifactId>brave</artifactId>
-                <version>${zipkin.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.zipkin.reporter2</groupId>
-                <artifactId>zipkin-reporter</artifactId>
-                <version>${zipkin.version}</version>
-            </dependency>
-
-            <!-- ?????????? -->
-            <dependency>
-                <groupId>com.example</groupId>
-                <artifactId>shared-kernel</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.example</groupId>
-                <artifactId>user-api-contracts</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.example</groupId>
-                <artifactId>food-api-contracts</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.example</groupId>
-                <artifactId>diet-api-contracts</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.example</groupId>
-                <artifactId>nutrition-api-contracts</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.example</groupId>
-                <artifactId>file-api-contracts</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.example</groupId>
-                <artifactId>dashboard-api-contracts</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.example</groupId>
-                <artifactId>auth-service</artifactId>
-                <version>${project.version}</version>
+                <groupId>org.mapstruct</groupId>
+                <artifactId>mapstruct-processor</artifactId>
+                <version>${mapstruct.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
+
+    <!-- 全局依赖 -->
+    <dependencies>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+    </dependencies>
 
     <build>
         <pluginManagement>
@@ -248,11 +225,28 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-compiler-plugin</artifactId>
-                    <version>3.10.1</version>
+                    <version>3.13.0</version>
                     <configuration>
-                        <source>1.8</source>
-                        <target>1.8</target>
+                        <source>21</source>
+                        <target>21</target>
                         <encoding>UTF-8</encoding>
+                        <annotationProcessorPaths>
+                            <path>
+                                <groupId>org.projectlombok</groupId>
+                                <artifactId>lombok</artifactId>
+                                <version>${lombok.version}</version>
+                            </path>
+                            <path>
+                                <groupId>org.mapstruct</groupId>
+                                <artifactId>mapstruct-processor</artifactId>
+                                <version>${mapstruct.version}</version>
+                            </path>
+                            <path>
+                                <groupId>org.projectlombok</groupId>
+                                <artifactId>lombok-mapstruct-binding</artifactId>
+                                <version>0.2.0</version>
+                            </path>
+                        </annotationProcessorPaths>
                     </configuration>
                 </plugin>
 
@@ -272,7 +266,7 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-surefire-plugin</artifactId>
-                    <version>3.0.0</version>
+                    <version>3.2.5</version>
                 </plugin>
             </plugins>
         </pluginManagement>

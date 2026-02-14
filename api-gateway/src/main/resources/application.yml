@@ -2,130 +2,94 @@ server:
   port: 8084
 
 spring:
-  main:
-    allow-bean-definition-overriding: true
-    web-application-type: reactive  # 明确指定为响应式应用
-  cloud:
-    sentinel:
-      transport:
-        dashboard: localhost:8080  # Sentinel控制台地址
-        port: 8719                 # 与控制台通信端口
-      # Sentinel专门负责流量控制、熔断降级、系统保护
-      # 使用代码配置规则，不依赖外部数据源
-      eager: true  # 启动时立即初始化Sentinel
-    gateway:
-      # 全局CORS配置
-      globalcors:
-        cors-configurations:
-          '[/**]':
-            allowed-origin-patterns: "*"
-            allowed-methods: "*"
-            allowed-headers: "*"
-            allow-credentials: true
-            max-age: 3600
-      # Gateway发现配置
-      discovery:
-        locator:
-          enabled: false  # 禁用服务发现路由，使用手动配置
-      # 路由配置
-      routes:
-        # 认证服务路由 - 端口8085
-        - id: auth_route
-          uri: http://localhost:8085
-          predicates:
-            - Path=/api/auth/**
+  application:
+    name: api-gateway
+  
+  # Redis 配置 (用于 JWT 黑名单)
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: 0
+      timeout: 3000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+          max-wait: -1ms
 
-        # 用户服务路由 - 端口8086
-        - id: user_route
-          uri: http://localhost:8086
-          predicates:
-            - Path=/user/**
-        - id: admin_user_route
-          uri: http://localhost:8086
-          predicates:
-            - Path=/api/admin/users/**
-
-        # 食物服务路由 - 端口8087
-        - id: food_route
-          uri: http://localhost:8087
-          predicates:
-            - Path=/api/food/**
-        - id: admin_food_route
-          uri: http://localhost:8087
-          predicates:
-            - Path=/api/admin/food/**
-
-        # 饮食记录服务路由 - 端口8088
-        - id: diet_records_route
-          uri: http://localhost:8088
-          predicates:
-            - Path=/api/diet-records/**
-        - id: admin_diet_records_route
-          uri: http://localhost:8088
-          predicates:
-            - Path=/api/admin/diet-records/**
-
-        # 营养分析服务路由 - 端口8089
-        - id: nutrition_route
-          uri: http://localhost:8089
-          predicates:
-            - Path=/api/nutrition/**
-        - id: health_route
-          uri: http://localhost:8089
-          predicates:
-            - Path=/api/health/**
-        - id: admin_nutrition_route
-          uri: http://localhost:8089
-          predicates:
-            - Path=/api/admin/nutrition/**
-
-        # 文件服务路由 - 端口8090
-        - id: files_route
-          uri: http://localhost:8090
-          predicates:
-            - Path=/api/files/**
-        - id: admin_files_route
-          uri: http://localhost:8090
-          predicates:
-            - Path=/api/admin/files/**
-
-        # 仪表盘服务路由 - 端口8091
-        - id: admin_dashboard_route
-          uri: http://localhost:8091
-          predicates:
-            - Path=/api/admin/dashboard/**
-      # Gateway专注于路由转发，限流交给Sentinel处理
-
-# JWT配置
+# JWT 配置
 jwt:
-  secret: your-secret-key-should-be-at-least-256-bits-long
-  expiration: 86400000
+  secret: ${JWT_SECRET:your-256-bit-secret-key-for-jwt-authentication-minimum-32-chars}
+  expiration: 86400000  # 24 小时
+  refresh-expiration: 604800000  # 7 天
 
-# 统一日志配置 - Gateway负责统一日志记录
+# Dubbo 配置
+dubbo:
+  application:
+    name: api-gateway
+    qos-enable: false
+  registry:
+    address: zookeeper://${ZOOKEEPER_HOST:localhost}:${ZOOKEEPER_PORT:2181}
+    timeout: 10000
+  consumer:
+    timeout: 30000
+    retries: 2
+    check: false  # 启动时不检查服务是否可用
+
+# 微信小程序配置
+wechat:
+  appid: ${WECHAT_APPID:}
+  secret: ${WECHAT_SECRET:}
+  login-url: https://api.weixin.qq.com/sns/jscode2session
+
+# AI 服务配置
+ai:
+  service:
+    url: ${AI_SERVICE_URL:http://127.0.0.1:8000}
+    token: ${AI_SERVICE_TOKEN:diet-recommend-internal-token-2024}
+    timeout: 30000  # 30秒超时（图像识别可能较慢）
+
+# 统一日志配置
+app:
+  logging:
+    mode: ${APP_LOGGING_MODE:dual}
+    json:
+      path: ${APP_LOGGING_JSON_PATH:logs}
+    request-log:
+      enabled: ${APP_REQUEST_LOG_ENABLED:true}
+      exclude-paths:
+        - /actuator/health
+        - /actuator/info
+
 logging:
+  config: classpath:observability-logback-spring.xml
   level:
-    # 应用日志
-    com.example.*: info
-    com.example.common.cache: warn
-    com.example.common.event.cache: warn
-    # Gateway模块日志
-    com.example.gateway.auth: info      # 身份认证模块
-    com.example.gateway.security: info  # 安全策略模块
-    com.example.gateway.protection: info # 流量保护模块
-    com.example.gateway.logging: info   # 统一日志模块
-    # Gateway路由日志
-    org.springframework.cloud.gateway: info
-    # Sentinel日志
-    com.alibaba.csp.sentinel: info
-    # 请求响应日志（可选，用于调试）
-    # reactor.netty.http.server: debug
+    root: INFO
+    com.example.diet: INFO
+    org.apache.dubbo: WARN
+    org.mybatis: WARN
 
-# 健康检查配置
+# Actuator 配置
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,sentinel
+        include: health,info
   endpoint:
     health:
-      show-details: when-authorized
+      show-details: when_authorized
+
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+logging:
+  level:
+    com.example.diet: DEBUG
+    org.apache.dubbo: INFO
+    org.mybatis: DEBUG

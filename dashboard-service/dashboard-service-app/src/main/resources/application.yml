@@ -1,0 +1,69 @@
+spring:
+  application:
+    name: dashboard-service
+  main:
+    web-application-type: none
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: ${REDIS_DATABASE:0}
+      timeout: 3000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+          max-wait: -1ms
+
+  cache:
+    type: redis
+    redis:
+      time-to-live: 2m
+      cache-null-values: false
+      use-key-prefix: true
+      key-prefix: "${spring.application.name}::"
+
+# Dubbo 配置
+dubbo:
+  application:
+    name: ${spring.application.name}
+  protocol:
+    name: dubbo
+    port: 20891
+  registry:
+    address: zookeeper://${ZOOKEEPER_HOST:localhost}:2181
+  consumer:
+    timeout: ${DUBBO_CONSUMER_TIMEOUT:5000}
+    check: false
+  scan:
+    base-packages: com.example.diet.dashboard.infrastructure.dubbo
+
+# 日志配置
+app:
+  logging:
+    mode: ${APP_LOGGING_MODE:dual}
+    json:
+      path: ${APP_LOGGING_JSON_PATH:logs}
+
+logging:
+  config: classpath:observability-logback-spring.xml
+  level:
+    root: INFO
+    com.example.diet: INFO
+    org.apache.dubbo: WARN
+    org.mybatis: WARN
+
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+logging:
+  level:
+    com.example.diet: DEBUG
+    org.apache.dubbo: INFO
+    org.mybatis: DEBUG

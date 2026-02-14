@@ -1,0 +1,19 @@
+package com.example.diet.record;
+
+import org.apache.dubbo.config.spring.context.annotation.EnableDubbo;
+import org.mybatis.spring.annotation.MapperScan;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+/**
+ * 饮食记录服务应用启动类
+ */
+@SpringBootApplication
+@EnableDubbo
+@MapperScan("com.example.diet.record.infrastructure.persistence.mapper")
+public class DietServiceApplication {
+
+    public static void main(String[] args) {
+        SpringApplication.run(DietServiceApplication.class, args);
+    }
+}

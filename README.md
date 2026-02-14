@@ -16,7 +16,7 @@
 - **多端支持**：Web管理后台 + 微信小程序
 - **统一网关**：API Gateway统一入口，支持JWT认证和路由转发
 - **事件驱动**：支持Redis Pub/Sub和Kafka的事件系统
-- **缓存优化**：多层缓存策略，支持本地缓存和Redis分布式缓存
+- **缓存优化**：Redis 分布式缓存策略
 - **配置管理**：统一的配置属性管理，支持环境区分
 
 ## 🏗️ 系统架构
@@ -56,7 +56,7 @@
 - **框架**: Spring Boot 2.7.x, Apache Dubbo 3.1.0
 - **安全**: Spring Security, JWT
 - **数据库**: MySQL 8.0, MyBatis Plus
-- **缓存**: Redis 6.x, Caffeine
+- **缓存**: Redis 6.x
 - **消息队列**: Apache Kafka (可选)
 - **服务发现**: Apache Zookeeper
 - **网关**: Spring Cloud Gateway
@@ -223,10 +223,10 @@ npm run serve
 
 - **用户认证**: `POST /api/auth/user/login`
 - **管理员认证**: `POST /api/auth/admin/login`
-- **食物查询**: `GET /api/food/list`
+- **食物查询**: `GET /api/foods`
 - **饮食记录**: `POST /api/diet-records`
-- **营养分析**: `GET /api/nutrition/daily`
-- **文件上传**: `POST /api/files/upload`
+- **营养分析**: `GET /api/nutrition/daily-summary`
+- **文件上传**: `POST /api/files/upload-url`
 - **仪表盘**: `GET /api/admin/dashboard/stats`
 
 ### 常见问题
