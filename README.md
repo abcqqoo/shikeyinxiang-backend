@@ -1,277 +1,77 @@
-# 食刻印象--饮食记录系统
+# 食刻印象（后端）
 
-[![Java](https://img.shields.io/badge/Java-17+-orange.svg)](https://www.oracle.com/java/)
-[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-2.7.x-brightgreen.svg)](https://spring.io/projects/spring-boot)
-[![Apache Dubbo](https://img.shields.io/badge/Apache%20Dubbo-3.1.0-blue.svg)](https://dubbo.apache.org/)
-[![Vue.js](https://img.shields.io/badge/Vue.js-2.6.14-green.svg)](https://vuejs.org/)
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+基于 Spring Boot 3 + Apache Dubbo 的饮食记录系统后端。HTTP 入口由 `api-gateway` 提供，其余服务以 Dubbo Provider 形式运行（`web-application-type: none`）。
 
-## 📋 项目简介
+## 技术栈（概要）
 
-这是一个基于Spring Boot和Apache Dubbo的微服务架构饮食记录系统，支持多端应用（Web管理后台、微信小程序）。系统采用现代化的微服务设计模式，实现了用户管理、食物数据管理、饮食记录、营养分析等核心功能。
+- Java 21，Maven
+- Spring Boot 3.3.x / Spring Framework 6.1.x
+- Apache Dubbo 3.3.x + Zookeeper（注册中心）
+- MySQL 8.x（业务数据），MyBatis-Plus
+- Redis（缓存、JWT 黑名单、Redis Stream）
+- Spring Security 6.x + JJWT（JWT）
 
-### 🎯 主要特性
+外部依赖（按需）：
 
-- **微服务架构**：基于Spring Boot + Dubbo的分布式服务架构
-- **多端支持**：Web管理后台 + 微信小程序
-- **统一网关**：API Gateway统一入口，支持JWT认证和路由转发
-- **事件驱动**：支持Redis Pub/Sub和Kafka的事件系统
-- **缓存优化**：Redis 分布式缓存策略
-- **配置管理**：统一的配置属性管理，支持环境区分
+- Cloudflare R2（S3 兼容对象存储，`file-service`）
+- AI 服务（HTTP 调用，`api-gateway` 可配置）
 
-## 🏗️ 系统架构
+## 环境要求
 
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   微信小程序     │    │   Vue.js 前端   │    │   管理后台      │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                       │                       │
-         └───────────────────────┼───────────────────────┘
-                                 │
-                    ┌─────────────────┐
-                    │   API Gateway   │
-                    │    (8084)       │
-                    └─────────────────┘
-                                 │
-         ┌───────────────────────┼───────────────────────┐
-         │                       │                       │
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Auth Service  │    │  User Service   │    │  Food Service   │
-│     (8085)      │    │     (8086)      │    │     (8087)      │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                       │                       │
-         └───────────────────────┼───────────────────────┘
-                                 │
-         ┌───────────────────────┼───────────────────────┐
-         │                       │                       │
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│  Diet Service   │    │Nutrition Service│    │  File Service   │
-│     (8088)      │    │     (9096)      │    │     (8089)      │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-```
-
-## 🛠️ 技术栈
-
-### 后端技术
-- **框架**: Spring Boot 2.7.x, Apache Dubbo 3.1.0
-- **安全**: Spring Security, JWT
-- **数据库**: MySQL 8.0, MyBatis Plus
-- **缓存**: Redis 6.x
-- **消息队列**: Apache Kafka (可选)
-- **服务发现**: Apache Zookeeper
-- **网关**: Spring Cloud Gateway
-
-### 前端技术
-- **Web端**: Vue.js 2.6.14, Element UI, Vuex, Vue Router
-- **小程序**: uni-app, 微信小程序
-- **工具**: Axios, ECharts, Sass
-
-### 开发工具
-- **构建**: Maven 3.6+
-- **JDK**: Java 17+
-- **IDE**: IntelliJ IDEA, HBuilderX
-
-## 📦 服务模块
-
-| 服务名称 | 端口 | 描述 |
-|---------|------|------|
-| api-gateway | 8084 | API网关服务，统一入口和认证 |
-| auth-service | 8085 | 认证服务，用户登录和JWT管理 |
-| user-service | 8086 | 用户管理服务 |
-| food-service | 8087 | 食物数据服务 |
-| diet-service | 8088 | 饮食记录服务 |
-| nutrition-service | 9096 | 营养分析服务 |
-| file-service | 8089 | 文件管理服务 |
-| dashboard-service | 8091 | 仪表盘服务 |
-
-### 共享模块
-- **shared-kernel**: 共享内核，包含通用配置、事件系统、缓存系统
-- **xxx-api-contracts**: 各服务的API契约模块
-
-## 🚀 快速开始
-
-### 环境要求
-
-- JDK 17+
-- Maven 3.6+
-- MySQL 8.0+
+- JDK 21
+- Maven 3.9+
+- MySQL 8.x
 - Redis 6.x+
 - Zookeeper 3.7+
-- Node.js 16+ (前端开发)
 
-### 1. 克隆项目
+## 架构
 
-```bash
-git clone <repository-url>
-cd spring-boot-dubbo-demo
+```mermaid
+flowchart LR
+  Mini[WeChat Mini Program] -->|HTTP| GW[api-gateway :8084]
+  Admin[Admin Web] -->|HTTP| GW
+
+  GW -->|JWT blacklist| Redis[(Redis)]
+
+  GW -->|Dubbo RPC| User[user-service :20886]
+  GW -->|Dubbo RPC| Food[food-service :20882]
+  GW -->|Dubbo RPC| Diet[diet-service :20883]
+  GW -->|Dubbo RPC| Nutri[nutrition-service :20884]
+  GW -->|Dubbo RPC| File[file-service :20889]
+  GW -->|Dubbo RPC| Dash[dashboard-service :20891]
+
+  ZK[(Zookeeper :2181)]
+  GW -. registry .-> ZK
+  User -. registry .-> ZK
+  Food -. registry .-> ZK
+  Diet -. registry .-> ZK
+  Nutri -. registry .-> ZK
+  File -. registry .-> ZK
+  Dash -. registry .-> ZK
+
+  MySQL[(MySQL)]
+  User --> MySQL
+  Food --> MySQL
+  Diet --> MySQL
+  Nutri --> MySQL
+
+  User -->|cache| Redis
+  Food -->|cache| Redis
+  File -->|cache| Redis
+  Dash -->|cache| Redis
+
+  Diet -->|Redis Stream: diet_record_changed| Redis
+  Nutri -->|consume| Redis
+
+  File -->|S3 API| R2[Cloudflare R2]
+  GW -->|HTTP| AI[AI service]
 ```
 
-### 2. 数据库初始化
+## 代码结构
 
-```bash
-# 创建数据库
-mysql -u root -p
-CREATE DATABASE dubbo_demo CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-
-# 导入数据
-mysql -u root -p dubbo_demo < dubbo_demo.sql
-```
-
-### 3. 启动基础服务
-
-```bash
-# 启动 Zookeeper
-zkServer.sh start
-
-# 启动 Redis
-redis-server
-
-# 启动 MySQL
-systemctl start mysql
-```
-
-### 4. 配置文件
-
-复制并修改配置文件：
-```bash
-cp application-example.yml application.yml
-# 根据实际环境修改数据库、Redis等配置
-```
-
-### 5. 启动后端服务
-
-```bash
-# 按顺序启动各个服务
-mvn clean install
-
-# 1. 认证服务
-cd auth-service && mvn spring-boot:run &
-
-# 2. 用户服务
-cd user-service && mvn spring-boot:run &
-
-# 3. 食物服务
-cd food-service && mvn spring-boot:run &
-
-# 4. 饮食服务
-cd diet-service && mvn spring-boot:run &
-
-# 5. 营养服务
-cd nutrition-service && mvn spring-boot:run &
-
-# 6. 文件服务
-cd file-service && mvn spring-boot:run &
-
-# 7. 仪表盘服务
-cd dashboard-service && mvn spring-boot:run &
-
-# 8. API网关
-cd api-gateway && mvn spring-boot:run &
-```
-
-### 6. 启动前端
-
-```bash
-# Web管理后台
-cd src
-npm install
-npm run serve
-
-# 微信小程序 (使用HBuilderX打开项目根目录)
-# 在HBuilderX中运行到微信开发者工具
-```
-
-## 📱 应用访问
-
-- **Web管理后台**: http://localhost:8080
-- **API网关**: http://localhost:8084
-- **微信小程序**: 通过微信开发者工具预览
-
-## 🎬 项目演示
-
-### Web管理后台界面
-
-![管理后台界面](docs/admin_show.png)
-
-*Web管理后台提供完整的系统管理功能，包括用户管理、食物数据管理、饮食记录统计、营养分析报表等功能模块。界面采用现代化的设计风格，操作简洁直观。*
-
-### 微信小程序客户端界面
-
-![微信小程序界面](docs/wechat_client_show.png)
-
-*微信小程序客户端为用户提供便捷的饮食记录功能，支持食物搜索、营养查询、饮食记录、健康报告等核心功能。界面设计符合微信小程序规范，用户体验友好。*
-
-## 🔗 前端项目
-
-本项目的前端代码托管在独立的仓库中，请访问以下链接获取完整的前端源码：
-
-### Web管理后台前端
-- **项目地址**: [shikeyinxiang-front-admin](https://github.com/RandyAnn/shikeyinxiang-front-admin)
-- **技术栈**: Vue.js 2.6.14 + Element UI + Vuex + Vue Router
-- **功能**: 系统管理、用户管理、食物数据管理、饮食记录统计、营养分析报表
-
-### 微信小程序客户端
-- **项目地址**: [shikeyinxiang-front-wechat](https://github.com/RandyAnn/shikeyinxiang-front-wechat)
-- **技术栈**: uni-app + 微信小程序
-- **功能**: 食物搜索、营养查询、饮食记录、健康报告、个人中心
-
-## 🔧 开发指南
-
-### API文档
-
-主要API端点：
-
-- **用户认证**: `POST /api/auth/user/login`
-- **管理员认证**: `POST /api/auth/admin/login`
-- **食物查询**: `GET /api/foods`
-- **饮食记录**: `POST /api/diet-records`
-- **营养分析**: `GET /api/nutrition/daily-summary`
-- **文件上传**: `POST /api/files/upload-url`
-- **仪表盘**: `GET /api/admin/dashboard/stats`
-
-### 常见问题
-
-1. **服务启动失败**
-   ```bash
-   # 检查端口占用
-   netstat -tulpn | grep :8084
-
-   # 检查Zookeeper连接
-   zkCli.sh -server localhost:2181
-   ```
-
-2. **数据库连接失败**
-   ```bash
-   # 检查MySQL服务状态
-   systemctl status mysql
-
-   # 测试数据库连接
-   mysql -h localhost -u root -p dubbo_demo
-   ```
-
-3. **Redis连接问题**
-   ```bash
-   # 检查Redis状态
-   redis-cli ping
-
-   # 查看Redis配置
-   redis-cli config get "*"
-   ```
-
-4. **前端跨域问题**
-   - 检查API Gateway的CORS配置
-   - 确认前端请求地址正确
-
-## 📄 许可证
-
-本项目采用 MIT 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情
-
-## 🙏 致谢
-
-- Spring Boot 社区
-- Apache Dubbo 社区
-- Vue.js 社区
-
----
-
-如有问题或建议，请提交 [Issue](https://github.com/your-username/spring-boot-dubbo-demo/issues)
+- `api-gateway/`: 唯一 HTTP 入口（鉴权、参数校验、Dubbo 调用）
+- `user-service/`、`food-service/`、`diet-service/`、`nutrition-service/`、`file-service/`、`dashboard-service/`: 领域服务
+- `*-service/*-service-api`: Dubbo 接口与 DTO（供网关/其他服务依赖）
+- `*-service/*-service-app`: 领域与应用实现（Dubbo Provider）
+- `shared-kernel/`: DDD 基础类型、通用响应/异常、CQRS 接口
+- `observability-starter/`: 统一日志与可观测性配置封装
