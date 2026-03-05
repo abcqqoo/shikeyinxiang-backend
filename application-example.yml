@@ -15,18 +15,29 @@ spring:
     password: 123456
     driver-class-name: com.mysql.cj.jdbc.Driver
   
-  # Redis配置
-  redis:
-    host: localhost
-    port: 6379
-    database: 0
-    timeout: 5000
-    lettuce:
-      pool:
-        max-active: 8
-        max-idle: 8
-        min-idle: 0
-        max-wait: -1
+  # Redis 配置
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: ${REDIS_DATABASE:0}
+      timeout: 3000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+          max-wait: -1ms
+
+  # Cache 配置 (Spring Cache -> Redis)
+  cache:
+    type: redis
+    redis:
+      time-to-live: 30m
+      cache-null-values: false
+      use-key-prefix: true
+      key-prefix: "${spring.application.name}::"
   
   # Kafka配置（当使用Kafka作为事件提供者时）
   kafka:
@@ -85,29 +96,6 @@ app:
         - com.example.food.event
         - com.example.file.event
 
-# ==================== 缓存系统配置 ====================
-  cache:
-    # 本地缓存配置（Caffeine）
-    local:
-      # 写入后过期时间（默认：15分钟）
-      expire-after-write: 15m
-      # 最大缓存条目数（默认：20000）
-      maximum-size: 20000
-    
-    # Redis缓存配置
-    redis:
-      # 缓存TTL（默认：45分钟）
-      ttl: 45m
-    
-    # 异步缓存操作线程池配置
-    async:
-      # 核心线程池大小（默认：8）
-      core-pool-size: 8
-      # 最大线程池大小（默认：16）
-      max-pool-size: 16
-      # 队列容量（默认：1000）
-      queue-capacity: 1000
-
 # ==================== JWT配置 ====================
 jwt:
   # JWT密钥（生产环境请使用更安全的密钥）
@@ -161,9 +149,9 @@ logging:
 #    - 支持通过 app.event.provider 切换事件提供者
 #    - 线程池和Kafka并发参数可配置
 #
-# 2. 缓存系统配置优化：
-#    - 本地缓存和Redis缓存TTL可分别配置
-#    - 异步操作线程池参数可调整
+# 2. 缓存系统配置：
+#    - 统一使用 Redis 作为 Spring Cache 存储
+#    - 可通过 spring.cache.redis.time-to-live 调整 TTL
 #
 # 3. 向后兼容性：
 #    - 所有配置项都有合理的默认值

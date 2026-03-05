@@ -1,0 +1,2 @@
+traceConsumerFilter=com.example.diet.observability.dubbo.DubboConsumerTraceFilter
+traceProviderFilter=com.example.diet.observability.dubbo.DubboProviderTraceFilter
