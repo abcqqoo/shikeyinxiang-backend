@@ -2,6 +2,7 @@ package com.example.diet.user.infrastructure.dubbo;
 
 import com.example.diet.user.api.ai.AiRecognitionApi;
 import com.example.diet.user.api.ai.command.CompleteAiRecognitionTaskCommand;
+import com.example.diet.user.api.ai.command.ConfirmAiRecognitionTaskRecordedCommand;
 import com.example.diet.user.api.ai.command.CreateAiRecognitionTaskCommand;
 import com.example.diet.user.api.ai.command.FailAiRecognitionTaskCommand;
 import com.example.diet.user.api.ai.query.GetAiRecognitionTopFoodsQuery;
@@ -40,6 +41,11 @@ public class AiRecognitionApiImpl implements AiRecognitionApi {
     @Override
     public void failTask(FailAiRecognitionTaskCommand command) {
         aiRecognitionApplicationService.failTask(command);
+    }
+
+    @Override
+    public void confirmTaskRecorded(ConfirmAiRecognitionTaskRecordedCommand command) {
+        aiRecognitionApplicationService.confirmTaskRecorded(command);
     }
 
     @Override

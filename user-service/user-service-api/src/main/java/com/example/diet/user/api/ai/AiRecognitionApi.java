@@ -1,6 +1,7 @@
 package com.example.diet.user.api.ai;
 
 import com.example.diet.user.api.ai.command.CompleteAiRecognitionTaskCommand;
+import com.example.diet.user.api.ai.command.ConfirmAiRecognitionTaskRecordedCommand;
 import com.example.diet.user.api.ai.command.CreateAiRecognitionTaskCommand;
 import com.example.diet.user.api.ai.command.FailAiRecognitionTaskCommand;
 import com.example.diet.user.api.ai.query.GetAiRecognitionTopFoodsQuery;
@@ -34,6 +35,11 @@ public interface AiRecognitionApi {
      * 标记识别任务失败
      */
     void failTask(FailAiRecognitionTaskCommand command);
+
+    /**
+     * 确认识别结果已录入饮食记录
+     */
+    void confirmTaskRecorded(ConfirmAiRecognitionTaskRecordedCommand command);
 
     /**
      * 获取识别统计概览

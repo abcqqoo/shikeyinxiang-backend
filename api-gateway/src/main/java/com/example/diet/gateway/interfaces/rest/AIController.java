@@ -9,20 +9,34 @@ import com.example.diet.food.api.response.FoodResponse;
 import com.example.diet.user.api.ai.AiRecognitionApi;
 import com.example.diet.user.api.ai.command.AiRecognitionItemCommand;
 import com.example.diet.user.api.ai.command.CompleteAiRecognitionTaskCommand;
+import com.example.diet.user.api.ai.command.ConfirmAiRecognitionTaskRecordedCommand;
 import com.example.diet.user.api.ai.command.CreateAiRecognitionTaskCommand;
 import com.example.diet.user.api.ai.command.FailAiRecognitionTaskCommand;
 import com.example.diet.shared.response.PageResponse;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.dubbo.config.annotation.DubboReference;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.*;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
+import java.io.InputStream;
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -46,8 +60,12 @@ import java.util.Map;
 public class AIController {
 
     private final RestTemplate restTemplate;
+    private final ObjectMapper objectMapper;
     private static final String SOURCE_DATABASE = "database";
     private static final String SOURCE_AI_ESTIMATED = "ai_estimated";
+    private final HttpClient streamingHttpClient = HttpClient.newBuilder()
+            .version(HttpClient.Version.HTTP_1_1)
+            .build();
 
     @DubboReference
     private AiRecognitionApi aiRecognitionApi;
@@ -77,27 +95,97 @@ public class AIController {
         return proxyRequest("/recommend", request);
     }
 
+    /**
+     * 智能营养问答
+     * 代理转发到 Python 问答服务
+     */
+    @PostMapping("/chat/nutrition")
+    public ResponseEntity<Map<String, Object>> askNutritionQuestion(
+            @RequestBody Map<String, Object> request) {
+
+        Long userId = getCurrentUserId();
+        log.info("action=nutrition_chat_request userId={}", userId);
+
+        return proxyRequest("/chat/nutrition", request);
+    }
+
+    /**
+     * 智能营养问答流式输出
+     */
+    @PostMapping(value = "/chat/nutrition/stream", produces = "application/x-ndjson;charset=UTF-8")
+    public ResponseEntity<StreamingResponseBody> streamNutritionQuestion(
+            @RequestBody Map<String, Object> request) {
+
+        Long userId = getCurrentUserId();
+        log.info("action=nutrition_chat_stream_request userId={}", userId);
+
+        StreamingResponseBody responseBody = outputStream -> {
+            try {
+                HttpRequest upstreamRequest = HttpRequest.newBuilder()
+                        .uri(URI.create(aiServiceUrl + "/chat/nutrition/stream"))
+                        .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                        .header(HttpHeaders.ACCEPT, "application/x-ndjson")
+                        .header("X-Service-Token", serviceToken)
+                        .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(request)))
+                        .build();
+
+                HttpResponse<InputStream> upstreamResponse = streamingHttpClient.send(
+                        upstreamRequest,
+                        HttpResponse.BodyHandlers.ofInputStream()
+                );
+
+                try (InputStream inputStream = upstreamResponse.body()) {
+                    if (upstreamResponse.statusCode() >= 400) {
+                        String body = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+                        outputStream.write(serializeStreamError(body));
+                        outputStream.flush();
+                        return;
+                    }
+
+                    byte[] buffer = new byte[1024];
+                    int readBytes;
+                    while ((readBytes = inputStream.read(buffer)) != -1) {
+                        outputStream.write(buffer, 0, readBytes);
+                        outputStream.flush();
+                    }
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                outputStream.write(serializeStreamError("营养问答请求被中断"));
+                outputStream.flush();
+            } catch (Exception e) {
+                log.error("action=proxy_ai_stream_request_failed path=/chat/nutrition/stream message={}", e.getMessage(), e);
+                outputStream.write(serializeStreamError("AI 服务暂时不可用，请稍后重试"));
+                outputStream.flush();
+            }
+        };
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType("application/x-ndjson;charset=UTF-8"))
+                .header(HttpHeaders.CACHE_CONTROL, "no-cache")
+                .body(responseBody);
+    }
+
     // ==================== 图像识别接口 ====================
 
     /**
      * 分析饮食图片
      * 代理转发到 Python 图像识别服务
      * 
-     * @param request 包含 image_base64 和 image_type 的请求体
+     * @param file 上传的图片文件
      */
-    @PostMapping("/recognition/analyze")
+    @PostMapping(value = "/recognition/analyze", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<Map<String, Object>> analyzeFoodImage(
-            @RequestBody Map<String, Object> request) {
+            @RequestPart("file") MultipartFile file) {
 
         Long userId = getCurrentUserId();
         log.info("action=food_recognition_request userId={}", userId);
 
-        // 验证请求参数
-        if (!request.containsKey("image_base64")) {
+        if (file.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of(
                     "code", 400,
                     "data", Collections.emptyMap(),
-                    "message", "缺少图片数据 (image_base64)"
+                    "message", "图片文件不能为空"
             ));
         }
 
@@ -107,7 +195,7 @@ public class AIController {
         }
         long requestStartMs = System.currentTimeMillis();
 
-        ResponseEntity<Map<String, Object>> response = proxyRequest("/recognition/analyze", request);
+        ResponseEntity<Map<String, Object>> response = proxyMultipartRequest("/recognition/analyze", file);
         try {
             enrichRecognitionData(response.getBody());
         } catch (Exception e) {
@@ -115,7 +203,26 @@ public class AIController {
         }
 
         persistRecognitionResult(taskId, response.getBody(), (int) (System.currentTimeMillis() - requestStartMs));
+        attachRecognitionTaskId(response.getBody(), taskId);
         return response;
+    }
+
+    @PostMapping("/recognition/tasks/{taskId}/recorded")
+    public ResponseEntity<Map<String, Object>> confirmRecognitionTaskRecorded(
+            @PathVariable Long taskId,
+            @RequestBody Map<String, Object> request) {
+
+        aiRecognitionApi.confirmTaskRecorded(ConfirmAiRecognitionTaskRecordedCommand.builder()
+                .taskId(taskId)
+                .userId(getCurrentUserId())
+                .selectedFoodNames(parseSelectedFoodNames(request != null ? request.get("selectedFoodNames") : null))
+                .build());
+
+        return ResponseEntity.ok(Map.of(
+                "code", 200,
+                "data", Collections.emptyMap(),
+                "message", "success"
+        ));
     }
 
     /**
@@ -170,6 +277,82 @@ public class AIController {
                             "data", Collections.emptyMap(),
                             "message", "AI 服务暂时不可用，请稍后重试"
                     ));
+        }
+    }
+
+    private ResponseEntity<Map<String, Object>> proxyMultipartRequest(String path, MultipartFile file) {
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+            headers.set("X-Service-Token", serviceToken);
+
+            MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+            body.add("file", createFilePart(file));
+
+            HttpEntity<MultiValueMap<String, Object>> entity = new HttpEntity<>(body, headers);
+
+            String targetUrl = aiServiceUrl + path;
+            log.debug("action=proxy_ai_multipart_request path={} targetUrl={}", path, targetUrl);
+
+            ResponseEntity<Map> response = restTemplate.exchange(
+                    targetUrl,
+                    HttpMethod.POST,
+                    entity,
+                    Map.class
+            );
+
+            @SuppressWarnings("unchecked")
+            Map<String, Object> responseBody = response.getBody();
+
+            return ResponseEntity.ok(responseBody);
+        } catch (IOException | RestClientException e) {
+            log.error("action=proxy_ai_multipart_request_failed path={} message={}", path, e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body(Map.of(
+                            "code", 503,
+                            "data", Collections.emptyMap(),
+                            "message", "AI 服务暂时不可用，请稍后重试"
+                    ));
+        }
+    }
+
+    private byte[] serializeStreamError(String message) throws IOException {
+        Map<String, Object> payload = Map.of(
+                "type", "error",
+                "message", message == null || message.isBlank() ? "AI 服务暂时不可用，请稍后重试" : message
+        );
+        return (objectMapper.writeValueAsString(payload) + "\n").getBytes(StandardCharsets.UTF_8);
+    }
+
+    private HttpEntity<ByteArrayResource> createFilePart(MultipartFile file) throws IOException {
+        HttpHeaders fileHeaders = new HttpHeaders();
+        fileHeaders.setContentType(resolveFileMediaType(file));
+
+        String originalFilename = file.getOriginalFilename();
+        final String filename = (originalFilename == null || originalFilename.isBlank())
+                ? "recognition-upload"
+                : originalFilename;
+
+        ByteArrayResource resource = new ByteArrayResource(file.getBytes()) {
+            @Override
+            public String getFilename() {
+                return filename;
+            }
+        };
+
+        return new HttpEntity<>(resource, fileHeaders);
+    }
+
+    private MediaType resolveFileMediaType(MultipartFile file) {
+        String contentType = file.getContentType();
+        if (contentType == null || contentType.isBlank()) {
+            return MediaType.APPLICATION_OCTET_STREAM;
+        }
+        try {
+            return MediaType.parseMediaType(contentType);
+        } catch (InvalidMediaTypeException e) {
+            log.warn("action=resolve_file_media_type_failed contentType={} fallback=application_octet_stream", contentType);
+            return MediaType.APPLICATION_OCTET_STREAM;
         }
     }
 
@@ -325,6 +508,38 @@ public class AIController {
             item.put("fat_g", scaleNutrition(matched.getFat(), ratio, 2));
             item.put("carbs_g", scaleNutrition(matched.getCarbs(), ratio, 2));
         }
+    }
+
+    private void attachRecognitionTaskId(Map<String, Object> responseBody, Long taskId) {
+        if (responseBody == null || taskId == null) {
+            return;
+        }
+
+        Map<String, Object> data = getMapValue(responseBody.get("data"));
+        if (data == null) {
+            data = new HashMap<>();
+            responseBody.put("data", data);
+        }
+        data.put("taskId", taskId);
+    }
+
+    private List<String> parseSelectedFoodNames(Object rawValue) {
+        if (!(rawValue instanceof List<?> rawItems)) {
+            return Collections.emptyList();
+        }
+
+        List<String> selectedFoodNames = new ArrayList<>();
+        for (Object rawItem : rawItems) {
+            if (!(rawItem instanceof String rawName)) {
+                continue;
+            }
+            String name = rawName.trim();
+            if (name.isEmpty()) {
+                continue;
+            }
+            selectedFoodNames.add(name);
+        }
+        return selectedFoodNames;
     }
 
     private FoodResponse matchFoodInDatabase(String foodName) {

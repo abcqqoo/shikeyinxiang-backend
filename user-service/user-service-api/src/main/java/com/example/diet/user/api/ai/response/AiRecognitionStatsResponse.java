@@ -22,9 +22,9 @@ public class AiRecognitionStatsResponse implements Serializable {
     private Long todayTotal;
 
     /**
-     * 识别成功率（百分比）
+     * 今日识别转记录率（百分比）
      */
-    private Double successRate;
+    private Double recordedRate;
 
     /**
      * 平均处理时长（秒）

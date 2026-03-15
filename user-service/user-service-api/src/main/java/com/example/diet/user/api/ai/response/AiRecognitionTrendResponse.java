@@ -28,12 +28,7 @@ public class AiRecognitionTrendResponse implements Serializable {
     private List<Long> totalList;
 
     /**
-     * 成功次数列表
+     * 实际录入饮食记录次数列表
      */
-    private List<Long> successList;
-
-    /**
-     * 失败次数列表
-     */
-    private List<Long> failedList;
+    private List<Long> recordedList;
 }

@@ -2,12 +2,14 @@ package com.example.diet.user.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.diet.shared.exception.BusinessException;
 import com.example.diet.shared.exception.ErrorCode;
 import com.example.diet.user.api.ai.command.AiRecognitionItemCommand;
 import com.example.diet.user.api.ai.command.CompleteAiRecognitionTaskCommand;
+import com.example.diet.user.api.ai.command.ConfirmAiRecognitionTaskRecordedCommand;
 import com.example.diet.user.api.ai.command.CreateAiRecognitionTaskCommand;
 import com.example.diet.user.api.ai.command.FailAiRecognitionTaskCommand;
 import com.example.diet.user.api.ai.query.GetAiRecognitionTopFoodsQuery;
@@ -148,6 +150,51 @@ public class AiRecognitionApplicationService {
         taskMapper.updateById(task);
     }
 
+    @Transactional
+    public void confirmTaskRecorded(ConfirmAiRecognitionTaskRecordedCommand command) {
+        if (command == null || command.getTaskId() == null || command.getUserId() == null) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "任务 ID 和用户 ID 不能为空");
+        }
+
+        AiRecognitionTaskPO task = taskMapper.selectById(command.getTaskId());
+        if (task == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "识别任务不存在");
+        }
+        if (!command.getUserId().equals(task.getUserId())) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权更新该识别任务");
+        }
+        if (!"completed".equalsIgnoreCase(task.getStatus())) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "仅已完成的识别任务可确认录入");
+        }
+
+        itemMapper.update(
+                null,
+                new LambdaUpdateWrapper<AiRecognitionItemPO>()
+                        .eq(AiRecognitionItemPO::getTaskId, command.getTaskId())
+                        .set(AiRecognitionItemPO::getWasSelected, Boolean.FALSE)
+        );
+
+        List<String> selectedFoodNames = command.getSelectedFoodNames() == null
+                ? Collections.emptyList()
+                : command.getSelectedFoodNames().stream()
+                .filter(StringUtils::hasText)
+                .map(String::trim)
+                .distinct()
+                .toList();
+
+        if (selectedFoodNames.isEmpty()) {
+            return;
+        }
+
+        itemMapper.update(
+                null,
+                new LambdaUpdateWrapper<AiRecognitionItemPO>()
+                        .eq(AiRecognitionItemPO::getTaskId, command.getTaskId())
+                        .in(AiRecognitionItemPO::getFoodName, selectedFoodNames)
+                        .set(AiRecognitionItemPO::getWasSelected, Boolean.TRUE)
+        );
+    }
+
     public AiRecognitionStatsResponse getStats() {
         LocalDate today = LocalDate.now();
         LocalDateTime startOfToday = today.atStartOfDay();
@@ -157,13 +204,11 @@ public class AiRecognitionApplicationService {
                 .ge(AiRecognitionTaskPO::getCreatedAt, startOfToday)
                 .lt(AiRecognitionTaskPO::getCreatedAt, startOfTomorrow));
 
-        Long total = taskMapper.selectCount(null);
-        Long completed = taskMapper.selectCount(new LambdaQueryWrapper<AiRecognitionTaskPO>()
-                .eq(AiRecognitionTaskPO::getStatus, "completed"));
+        Long todayRecorded = itemMapper.countDistinctRecordedTasksBetween(startOfToday, startOfTomorrow);
 
-        double successRate = 0.0D;
-        if (total != null && total > 0 && completed != null) {
-            successRate = roundToScale(completed * 100.0D / total, 1);
+        double recordedRate = 0.0D;
+        if (todayTotal != null && todayTotal > 0 && todayRecorded != null) {
+            recordedRate = roundToScale(todayRecorded * 100.0D / todayTotal, 1);
         }
 
         Double avgProcessingTime = getAverageCompletedProcessingSeconds();
@@ -171,7 +216,7 @@ public class AiRecognitionApplicationService {
 
         return AiRecognitionStatsResponse.builder()
                 .todayTotal(todayTotal == null ? 0L : todayTotal)
-                .successRate(successRate)
+                .recordedRate(recordedRate)
                 .avgProcessingTime(avgProcessingTime)
                 .topFood(topFood)
                 .build();
@@ -187,9 +232,7 @@ public class AiRecognitionApplicationService {
         QueryWrapper<AiRecognitionTaskPO> wrapper = new QueryWrapper<>();
         wrapper.select(
                         "DATE(created_at) AS statDate",
-                        "COUNT(*) AS totalCount",
-                        "SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS successCount",
-                        "SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failedCount"
+                        "COUNT(*) AS totalCount"
                 )
                 .ge("created_at", startDate.atStartOfDay())
                 .lt("created_at", endDate.plusDays(1).atStartOfDay())
@@ -205,15 +248,29 @@ public class AiRecognitionApplicationService {
             }
             groupedMap.put(date, new DailyStat(
                     toLong(getIgnoreCase(row, "totalCount")),
-                    toLong(getIgnoreCase(row, "successCount")),
-                    toLong(getIgnoreCase(row, "failedCount"))
+                    0L
+            ));
+        }
+
+        List<Map<String, Object>> recordedRows = itemMapper.selectRecordedTaskTrend(
+                startDate.atStartOfDay(),
+                endDate.plusDays(1).atStartOfDay()
+        );
+        for (Map<String, Object> row : recordedRows) {
+            LocalDate date = toLocalDate(getIgnoreCase(row, "statDate"));
+            if (date == null) {
+                continue;
+            }
+            DailyStat currentStat = groupedMap.getOrDefault(date, DailyStat.EMPTY);
+            groupedMap.put(date, new DailyStat(
+                    currentStat.total(),
+                    toLong(getIgnoreCase(row, "recordedCount"))
             ));
         }
 
         List<String> dateList = new ArrayList<>(days);
         List<Long> totalList = new ArrayList<>(days);
-        List<Long> successList = new ArrayList<>(days);
-        List<Long> failedList = new ArrayList<>(days);
+        List<Long> recordedList = new ArrayList<>(days);
 
         for (int i = 0; i < days; i++) {
             LocalDate date = startDate.plusDays(i);
@@ -221,15 +278,13 @@ public class AiRecognitionApplicationService {
 
             dateList.add(date.format(DATE_LABEL_FORMATTER));
             totalList.add(stat.total());
-            successList.add(stat.success());
-            failedList.add(stat.failed());
+            recordedList.add(stat.recorded());
         }
 
         return AiRecognitionTrendResponse.builder()
                 .dateList(dateList)
                 .totalList(totalList)
-                .successList(successList)
-                .failedList(failedList)
+                .recordedList(recordedList)
                 .build();
     }
 
@@ -612,7 +667,7 @@ public class AiRecognitionApplicationService {
         return value.substring(0, maxLength);
     }
 
-    private record DailyStat(Long total, Long success, Long failed) {
-        private static final DailyStat EMPTY = new DailyStat(0L, 0L, 0L);
+    private record DailyStat(Long total, Long recorded) {
+        private static final DailyStat EMPTY = new DailyStat(0L, 0L);
     }
 }
